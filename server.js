@@ -34,7 +34,9 @@ var CONFIG_DIR = process.env.CONFIG_DIR || process.cwd(),
     // The topic type to send state changes to hubitat
     TOPIC_WRITE_STATE = 'set_state',
     SUFFIX_WRITE_STATE = 'state_write_suffix',
-    RETAIN = 'retain';
+    RETAIN = 'retain',
+    // Don't retain momentary events, as this will obviously cause problems!
+    NO_RETAIN_FOR = ['push', 'hold'];
 
 var app = express(),
     client,
@@ -168,11 +170,15 @@ function handlePushEvent (req, res) {
     var topic = getTopicFor(req.body.name, req.body.type, TOPIC_READ_STATE),
         value = req.body.value;
 
-    winston.info('Incoming message from Hubitat: %s = %s', topic, value);
+    // Ensure retain flag is set appropriately, depending on the event type.
+    const type = req.body.type.indexOf('/') > -1 ? req.body.type.substr(req.body.type.lastIndexOf('/') + 1) : req.body.type;
+    const retain = NO_RETAIN_FOR.indexOf(type) > -1 ? false : config.mqtt[RETAIN];
+
+    winston.info('Incoming message from Hubitat: %s = %s; retain: %s', topic, value, retain);
     history[topic] = value;
 
     client.publish(topic, value, {
-        retain: config.mqtt[RETAIN]
+        retain: retain
     }, function () {
         res.send({
             status: 'OK'
